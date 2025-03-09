@@ -2,7 +2,7 @@
 /*
 Plugin Name: Ioce Photo
 Description: Plugin para vender fotos con WooCommerce.
-Version: 2.3
+Version: 2.4
 Author: Erick Hernandez
 */
 
