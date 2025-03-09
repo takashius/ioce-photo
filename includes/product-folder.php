@@ -25,6 +25,9 @@ function crear_productos_desde_carpeta($atts)
 
   // Crear productos para cada archivo de imagen
   foreach ($archivos as $archivo) {
+    if (strpos(basename($archivo), 'thumb_') === 0) {
+      continue;
+    }
     crear_producto_desde_imagen($archivo, $atts['categoria'], $atts['precio']);
   }
 
@@ -39,27 +42,35 @@ function crear_producto_desde_imagen($imagen_path, $categoria, $precio)
     return new WP_Error('imagen_no_existe', 'La imagen no existe en la ruta especificada.');
   }
 
-  // Paso 2: Crear miniatura de la imagen
   $upload_dir = wp_get_upload_dir();
-  $thumbnail_path = $upload_dir['path'] . '/thumbnail-' . basename($imagen_path);
-  error_log("Ruta de la miniatura: $thumbnail_path");
 
-  // Agregar marca de agua
-  $marca_agua_path = plugin_dir_path(dirname(__FILE__)) . 'images/logo.png'; // Ruta de la marca de agua
-  if (file_exists($marca_agua_path)) {
-    error_log("Marca de agua encontrada en: $marca_agua_path");
+  // Buscar si existe una miniatura con el prefijo `thumb_`
+  $miniatura_existente = dirname($imagen_path) . '/thumb_' . basename($imagen_path);
 
-    // Usar la función para crear la miniatura con la marca de agua
-    $resultado = aplicar_marca_de_agua_con_gd($imagen_path, $marca_agua_path, $thumbnail_path);
-
-    if (!$resultado) {
-      return new WP_Error('miniatura_error', 'No se pudo generar la miniatura con la marca de agua.');
-    }
+  if (file_exists($miniatura_existente)) {
+    // Si la miniatura existe, usarla directamente
+    $thumbnail_path = $miniatura_existente;
+    error_log("Se encontró una miniatura existente: $thumbnail_path");
   } else {
-    error_log("ERROR: No se encontró la marca de agua en la ruta especificada: $marca_agua_path");
+    // Si no existe miniatura, generar una nueva
+    $thumbnail_path = $upload_dir['path'] . '/thumbnail-' . basename($imagen_path);
+    error_log("Ruta de la miniatura generada: $thumbnail_path");
+
+    $marca_agua_path = plugin_dir_path(dirname(__FILE__)) . 'images/logo.png'; // Ruta de la marca de agua
+    if (file_exists($marca_agua_path)) {
+      error_log("Marca de agua encontrada en: $marca_agua_path");
+
+      $resultado = aplicar_marca_de_agua_con_gd($imagen_path, $marca_agua_path, $thumbnail_path);
+
+      if (!$resultado) {
+        return new WP_Error('miniatura_error', 'No se pudo generar la miniatura con la marca de agua.');
+      }
+    } else {
+      error_log("ERROR: No se encontró la marca de agua en la ruta especificada: $marca_agua_path");
+    }
   }
 
-  // Paso 4: Subir la miniatura a la biblioteca de medios
+  // Paso 2: Subir la miniatura a la biblioteca de medios
   $file_array = array(
     'name' => basename($thumbnail_path),
     'tmp_name' => $thumbnail_path
@@ -71,7 +82,7 @@ function crear_producto_desde_imagen($imagen_path, $categoria, $precio)
     return $thumbnail_id;
   }
 
-  // Paso 5: Crear el producto
+  // Paso 3: Crear el producto
   $producto_id = wp_insert_post(array(
     'post_title' => basename($imagen_path),
     'post_content' => '',
@@ -83,7 +94,7 @@ function crear_producto_desde_imagen($imagen_path, $categoria, $precio)
     return $producto_id;
   }
 
-  // Paso 6: Establecer los metadatos del producto
+  // Paso 4: Establecer los metadatos del producto
   wp_set_object_terms($producto_id, 'simple', 'product_type');
   wp_set_object_terms($producto_id, $categoria, 'product_cat');
 
@@ -99,17 +110,17 @@ function crear_producto_desde_imagen($imagen_path, $categoria, $precio)
   // Crear el array de archivos descargables en el formato correcto
   $downloadable_files = array(
     md5($imagen_url) => array( // ID único basado en la URL
-      'id' => md5($imagen_url), // ID único
+      'id' => md5($imagen_url),
       'name' => __('Imagen en Alta Resolución', 'woocommerce'),
-      'file' => esc_url($imagen_url), // URL del archivo
-      'enabled' => true // Habilitar el archivo
+      'file' => esc_url($imagen_url),
+      'enabled' => true
     )
   );
   update_post_meta($producto_id, '_downloadable_files', $downloadable_files);
   update_post_meta($producto_id, '_download_limit', -1);
   update_post_meta($producto_id, '_download_expiry', '');
 
-  // Paso 7: Asignar la miniatura al producto
+  // Paso 5: Asignar la miniatura al producto
   set_post_thumbnail($producto_id, $thumbnail_id);
 
   return $producto_id; // Retorna el ID del producto creado
